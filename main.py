@@ -6,7 +6,6 @@ import numpy as np
 from PIL import Image
 import cv2
 import tempfile
-import io
 
 # Function to download the model from a direct download link
 def download_model_from_link(url, model_path):
@@ -101,7 +100,16 @@ def capture_image_from_webcam():
 # Streamlit app
 st.title('Card Image Classification')
 
-# Capture from webcam
+# Upload image functionality
+uploaded_file = st.file_uploader("Choose an image...", type="jpg")
+if uploaded_file is not None:
+    img = Image.open(uploaded_file).convert('RGB')
+    img = img.resize(img_size)
+    img_array = np.array(img)  # Convert image to array
+    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+    st.image(img, caption='Uploaded Image', use_column_width=False, width=300)
+
+# Webcam capture functionality
 if st.button("Capture from Webcam"):
     webcam_image_path = capture_image_from_webcam()
     if webcam_image_path:
@@ -110,29 +118,33 @@ if st.button("Capture from Webcam"):
         st.text("Click 'Predict' to get the prediction.")
 
 # Predict button
+def predict(image_path):
+    img = Image.open(image_path).convert('RGB')
+    img = img.resize(img_size)
+    img_array = np.array(img)  # Convert image to array
+    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+
+    try:
+        predictions = model.predict(img_array)
+        predicted_class_index = np.argmax(predictions, axis=1)[0]
+        predicted_class_name = card_names[predicted_class_index]
+
+        st.markdown(f"""
+        **Prediction Result:**
+
+        The card image is most likely: **{predicted_class_name}**
+
+        **Prediction Confidence:**
+
+        Probability: {predictions[0][predicted_class_index]:.2f}
+        """)
+    except Exception as e:
+        st.error(f"Error making prediction: {e}")
+
+if uploaded_file is not None:
+    if st.button("Predict Upload Image"):
+        predict(uploaded_file)
+
 if 'captured_image_path' in st.session_state:
-    if st.button("Predict"):
-        image_path = st.session_state['captured_image_path']
-        img = Image.open(image_path).convert('RGB')
-        img = img.resize(img_size)
-        img_array = np.array(img)  # Convert image to array
-        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
-
-        try:
-            predictions = model.predict(img_array)
-            predicted_class_index = np.argmax(predictions, axis=1)[0]
-            predicted_class_name = card_names[predicted_class_index]
-
-            st.markdown(f"""
-            **Prediction Result:**
-
-            The captured card image is most likely: **{predicted_class_name}**
-
-            **Prediction Confidence:**
-
-            Probability: {predictions[0][predicted_class_index]:.2f}
-            """)
-        except Exception as e:
-            st.error(f"Error making prediction: {e}")
-else:
-    st.warning('Click "Capture from Webcam" to take a picture and get a prediction.')
+    if st.button("Predict Webcam Image"):
+        predict(st.session_state['captured_image_path'])
