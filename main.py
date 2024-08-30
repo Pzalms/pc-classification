@@ -61,7 +61,6 @@ card_names = {
 
 # Function to capture an image from the webcam
 def capture_image_from_webcam():
-    # Open the webcam
     cap = cv2.VideoCapture(0)
     st.text('Press "s" to save the image or "q" to exit the camera.')
     while True:
@@ -70,12 +69,10 @@ def capture_image_from_webcam():
             st.error("Failed to grab frame from webcam.")
             break
 
-        # Convert BGR (OpenCV) to RGB (Streamlit)
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         st.image(frame_rgb, channels='RGB', use_column_width=True)
         
         if cv2.waitKey(1) & 0xFF == ord('s'):
-            # Save the captured image
             temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
             cv2.imwrite(temp_file.name, frame)
             cap.release()
@@ -100,19 +97,16 @@ if capture_btn:
         uploaded_file = open(webcam_image_path, "rb")
 
 if uploaded_file is not None:
-    # Load and preprocess the image
     img = Image.open(uploaded_file).convert('RGB')
     img = img.resize(img_size)
     img_array = np.array(img)  # Convert image to array
     img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
 
-    # Make predictions
     try:
         predictions = model.predict(img_array)
         predicted_class_index = np.argmax(predictions, axis=1)[0]
         predicted_class_name = card_names[predicted_class_index]
 
-        # Show image and prediction
         st.image(img, caption='Uploaded/Captured Image', use_column_width=False, width=300)
         st.markdown(f"""
         **Prediction Result:**
