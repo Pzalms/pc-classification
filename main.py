@@ -1,11 +1,11 @@
 import os
 import requests
+import numpy as np
 import streamlit as st
 from tensorflow.keras.models import load_model
-import numpy as np
 from PIL import Image
-import cv2
 import tempfile
+from streamlit_webrtc import VideoTransformerBase, webrtc_streamer
 
 # Function to download the model from a direct download link
 def download_model_from_link(url, model_path):
@@ -58,45 +58,6 @@ card_names = {
     49: 'two of clubs', 50: 'two of diamonds', 51: 'two of hearts', 52: 'two of spades'
 }
 
-# Function to capture an image from the webcam
-def capture_image_from_webcam():
-    # Create a temporary file to save the image
-    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
-    cap = cv2.VideoCapture(0)
-    
-    if not cap.isOpened():
-        st.error("Error: Could not open webcam.")
-        return None
-
-    st.text('Press "s" to capture the image or "q" to quit.')
-    
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            st.error("Failed to grab frame from webcam.")
-            cap.release()
-            cv2.destroyAllWindows()
-            return None
-
-        # Display the video feed
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        st.image(frame_rgb, channels='RGB', use_column_width=True)
-
-        # Check for user input
-        key = cv2.waitKey(1) & 0xFF
-        if key == ord('s'):
-            # Save the captured image
-            cv2.imwrite(temp_file.name, frame)
-            st.text("Image captured successfully!")
-            cap.release()
-            cv2.destroyAllWindows()
-            return temp_file.name
-        elif key == ord('q'):
-            st.text("Exiting webcam capture.")
-            cap.release()
-            cv2.destroyAllWindows()
-            return None
-
 # Streamlit app
 st.title('Card Image Classification')
 
@@ -110,18 +71,21 @@ if uploaded_file is not None:
     st.image(img, caption='Uploaded Image', use_column_width=False, width=300)
 
 # Webcam capture functionality
-if st.button("Capture from Webcam"):
-    webcam_image_path = capture_image_from_webcam()
-    if webcam_image_path:
-        st.session_state['captured_image_path'] = webcam_image_path
-        st.image(webcam_image_path, caption='Captured Image', use_column_width=False, width=300)
-        st.text("Click 'Predict' to get the prediction.")
+class VideoTransformer(VideoTransformerBase):
+    def __init__(self):
+        self.frame = None
 
-# Predict button
-def predict(image_path):
-    img = Image.open(image_path).convert('RGB')
-    img = img.resize(img_size)
-    img_array = np.array(img)  # Convert image to array
+    def transform(self, frame):
+        self.frame = frame.to_ndarray(format="bgr24")
+        return frame
+
+def predict(image_array):
+    img_array = np.array(image_array)
+    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+    img_array = Image.fromarray(img_array[0])
+    img_array = img_array.resize(img_size)
+
+    img_array = np.array(img_array)  # Convert image to array
     img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
 
     try:
@@ -141,10 +105,20 @@ def predict(image_path):
     except Exception as e:
         st.error(f"Error making prediction: {e}")
 
+# Display the webcam interface
+st.subheader("Capture Image from Webcam")
+
+webrtc_ctx = webrtc_streamer(
+    key="example",
+    video_transformer_factory=VideoTransformer,
+    media_stream_constraints={"video": True},
+)
+
+if st.button("Predict Webcam Image"):
+    if webrtc_ctx.video_transformer and webrtc_ctx.video_transformer.frame is not None:
+        frame = webrtc_ctx.video_transformer.frame
+        predict(frame)
+
 if uploaded_file is not None:
     if st.button("Predict Upload Image"):
-        predict(uploaded_file)
-
-if 'captured_image_path' in st.session_state:
-    if st.button("Predict Webcam Image"):
-        predict(st.session_state['captured_image_path'])
+        predict(Image.open(uploaded_file))
