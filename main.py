@@ -5,7 +5,6 @@ import streamlit as st
 from tensorflow.keras.models import load_model
 from PIL import Image
 import tempfile
-from streamlit_webrtc import VideoTransformerBase, webrtc_streamer
 
 # Function to download the model from a direct download link
 def download_model_from_link(url, model_path):
@@ -58,29 +57,14 @@ card_names = {
     49: 'two of clubs', 50: 'two of diamonds', 51: 'two of hearts', 52: 'two of spades'
 }
 
-# Streamlit app
-st.title('Card Image Classification')
-
-# Upload image functionality
-uploaded_file = st.file_uploader("Choose an image...", type="jpg")
-if uploaded_file is not None:
-    img = Image.open(uploaded_file).convert('RGB')
-    img = img.resize(img_size)
-    img_array = np.array(img)  # Convert image to array
-    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
-    st.image(img, caption='Uploaded Image', use_column_width=False, width=300)
-
-# Define a function to predict card type
-def predict_image(image_array):
-    img_array = np.array(image_array)
-    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
-    img_array = Image.fromarray(img_array[0])
-    img_array = img_array.resize(img_size)
-
-    img_array = np.array(img_array)  # Convert image to array
-    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
-
+# Function to process and predict image
+def predict_image(img):
     try:
+        img = img.convert('RGB')
+        img = img.resize(img_size)
+        img_array = np.array(img)  # Convert image to array
+        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+
         predictions = model.predict(img_array)
         predicted_class_index = np.argmax(predictions, axis=1)[0]
         predicted_class_name = card_names[predicted_class_index]
@@ -97,33 +81,23 @@ def predict_image(image_array):
     except Exception as e:
         st.error(f"Error making prediction: {e}")
 
-# Webcam capture functionality
-class ImageCapture(VideoTransformerBase):
-    def __init__(self):
-        self.frame = None
+# Streamlit app
+st.title('Card Image Classification')
 
-    def transform(self, frame):
-        self.frame = frame.to_ndarray(format="bgr24")
-        return frame
+# Upload image functionality
+uploaded_file = st.file_uploader("Choose an image...", type="jpg")
+if uploaded_file is not None:
+    img = Image.open(uploaded_file)
+    st.image(img, caption='Uploaded Image', use_column_width=False, width=300)
 
-# Display the webcam interface
-st.subheader("Capture Image from Webcam")
-
-webrtc_ctx = webrtc_streamer(
-    key="example",
-    video_transformer_factory=ImageCapture,
-    media_stream_constraints={"video": True},
-)
-
-if st.button("Capture and Predict Webcam Image"):
-    if webrtc_ctx.video_transformer and webrtc_ctx.video_transformer.frame is not None:
-        frame = webrtc_ctx.video_transformer.frame
-        img = Image.fromarray(frame)
-        img = img.convert('RGB')
-        img = img.resize(img_size)
-        st.image(img, caption='Captured Image', use_column_width=False, width=300)
+    if st.button("Predict Upload Image"):
         predict_image(img)
 
-if uploaded_file is not None:
-    if st.button("Predict Upload Image"):
-        predict_image(Image.open(uploaded_file))
+# Webcam capture functionality
+camera_image = st.camera_input("Take a picture")
+if camera_image is not None:
+    img = Image.open(camera_image)
+    st.image(img, caption='Captured Image', use_column_width=False, width=300)
+    
+    if st.button("Predict Webcam Image"):
+        predict_image(img)
