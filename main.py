@@ -17,12 +17,15 @@ def download_model_from_drive(url, model_path):
                 f.write(chunk)
     return model_path
 
-# Download the model file if not already downloaded
+# Define model URL and local path
 model_url = 'https://drive.google.com/uc?export=download&id=17KRgfd9uHeSqF_0q627fOX7MeTIryoWY'
 model_path = 'efficientnet.h5'
 
+# Download the model if it does not exist
 if not os.path.exists(model_path):
+    st.text('Downloading model from Google Drive...')
     download_model_from_drive(model_url, model_path)
+    st.text('Model downloaded successfully.')
 
 # Load the pre-trained model
 model = load_model(model_path)
