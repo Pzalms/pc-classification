@@ -7,10 +7,10 @@ from PIL import Image
 import cv2
 import tempfile
 
-# Function to download the model from Google Drive
-def download_model_from_drive(url, model_path):
+# Function to download the model from a direct download link
+def download_model_from_link(url, model_path):
     try:
-        # Download the file from Google Drive
+        # Download the file from the direct link
         response = requests.get(url, stream=True)
         response.raise_for_status()  # Check for HTTP errors
         with open(model_path, 'wb') as f:
@@ -23,13 +23,13 @@ def download_model_from_drive(url, model_path):
         raise
 
 # Define model URL and local path
-model_url = 'https://drive.google.com/uc?export=download&id=17KRgfd9uHeSqF_0q627fOX7MeTIryoWY'
+model_url = 'https://drive.usercontent.google.com/download?id=17KRgfd9uHeSqF_0q627fOX7MeTIryoWY&export=download&authuser=0&confirm=t&uuid=1f97efb3-b4a1-43ba-907f-b31dc5cd46a4&at=AO7h07cc6j_JasHHvb1t5mcR3eNJ:1725018472593'
 model_path = 'efficientnet.h5'
 
 # Download the model file if it does not exist
 if not os.path.exists(model_path):
-    st.text('Downloading model from Google Drive...')
-    download_model_from_drive(model_url, model_path)
+    st.text('Downloading model from direct link...')
+    download_model_from_link(model_url, model_path)
 
 # Load the pre-trained model
 try:
