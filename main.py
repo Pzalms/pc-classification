@@ -70,16 +70,8 @@ if uploaded_file is not None:
     img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
     st.image(img, caption='Uploaded Image', use_column_width=False, width=300)
 
-# Webcam capture functionality
-class VideoTransformer(VideoTransformerBase):
-    def __init__(self):
-        self.frame = None
-
-    def transform(self, frame):
-        self.frame = frame.to_ndarray(format="bgr24")
-        return frame
-
-def predict(image_array):
+# Define a function to predict card type
+def predict_image(image_array):
     img_array = np.array(image_array)
     img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
     img_array = Image.fromarray(img_array[0])
@@ -105,20 +97,33 @@ def predict(image_array):
     except Exception as e:
         st.error(f"Error making prediction: {e}")
 
+# Webcam capture functionality
+class ImageCapture(VideoTransformerBase):
+    def __init__(self):
+        self.frame = None
+
+    def transform(self, frame):
+        self.frame = frame.to_ndarray(format="bgr24")
+        return frame
+
 # Display the webcam interface
 st.subheader("Capture Image from Webcam")
 
 webrtc_ctx = webrtc_streamer(
     key="example",
-    video_transformer_factory=VideoTransformer,
+    video_transformer_factory=ImageCapture,
     media_stream_constraints={"video": True},
 )
 
-if st.button("Predict Webcam Image"):
+if st.button("Capture and Predict Webcam Image"):
     if webrtc_ctx.video_transformer and webrtc_ctx.video_transformer.frame is not None:
         frame = webrtc_ctx.video_transformer.frame
-        predict(frame)
+        img = Image.fromarray(frame)
+        img = img.convert('RGB')
+        img = img.resize(img_size)
+        st.image(img, caption='Captured Image', use_column_width=False, width=300)
+        predict_image(img)
 
 if uploaded_file is not None:
     if st.button("Predict Upload Image"):
-        predict(Image.open(uploaded_file))
+        predict_image(Image.open(uploaded_file))
