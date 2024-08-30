@@ -6,13 +6,13 @@ import numpy as np
 from PIL import Image
 import cv2
 import tempfile
+import io
 
 # Function to download the model from a direct download link
 def download_model_from_link(url, model_path):
     try:
-        # Download the file from the direct link
         response = requests.get(url, stream=True)
-        response.raise_for_status()  # Check for HTTP errors
+        response.raise_for_status()
         with open(model_path, 'wb') as f:
             for chunk in response.iter_content(chunk_size=1024):
                 if chunk:
@@ -61,63 +61,78 @@ card_names = {
 
 # Function to capture an image from the webcam
 def capture_image_from_webcam():
+    # Create a temporary file to save the image
+    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
     cap = cv2.VideoCapture(0)
-    st.text('Press "s" to save the image or "q" to exit the camera.')
+    
+    if not cap.isOpened():
+        st.error("Error: Could not open webcam.")
+        return None
+
+    st.text('Press "s" to capture the image or "q" to quit.')
+    
     while True:
         ret, frame = cap.read()
         if not ret:
             st.error("Failed to grab frame from webcam.")
-            break
+            cap.release()
+            cv2.destroyAllWindows()
+            return None
 
+        # Display the video feed
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         st.image(frame_rgb, channels='RGB', use_column_width=True)
-        
-        if cv2.waitKey(1) & 0xFF == ord('s'):
-            temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.jpg')
+
+        # Check for user input
+        key = cv2.waitKey(1) & 0xFF
+        if key == ord('s'):
+            # Save the captured image
             cv2.imwrite(temp_file.name, frame)
+            st.text("Image captured successfully!")
             cap.release()
             cv2.destroyAllWindows()
             return temp_file.name
-        elif cv2.waitKey(1) & 0xFF == ord('q'):
+        elif key == ord('q'):
+            st.text("Exiting webcam capture.")
             cap.release()
             cv2.destroyAllWindows()
-            break
-    return None
+            return None
 
 # Streamlit app
 st.title('Card Image Classification')
 
-# Buttons for file upload or webcam capture
-uploaded_file = st.file_uploader("Choose an image...", type="jpg")
-capture_btn = st.button("Capture from Webcam")
-
-if capture_btn:
+# Capture from webcam
+if st.button("Capture from Webcam"):
     webcam_image_path = capture_image_from_webcam()
     if webcam_image_path:
-        uploaded_file = open(webcam_image_path, "rb")
+        st.session_state['captured_image_path'] = webcam_image_path
+        st.image(webcam_image_path, caption='Captured Image', use_column_width=False, width=300)
+        st.text("Click 'Predict' to get the prediction.")
 
-if uploaded_file is not None:
-    img = Image.open(uploaded_file).convert('RGB')
-    img = img.resize(img_size)
-    img_array = np.array(img)  # Convert image to array
-    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+# Predict button
+if 'captured_image_path' in st.session_state:
+    if st.button("Predict"):
+        image_path = st.session_state['captured_image_path']
+        img = Image.open(image_path).convert('RGB')
+        img = img.resize(img_size)
+        img_array = np.array(img)  # Convert image to array
+        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
 
-    try:
-        predictions = model.predict(img_array)
-        predicted_class_index = np.argmax(predictions, axis=1)[0]
-        predicted_class_name = card_names[predicted_class_index]
+        try:
+            predictions = model.predict(img_array)
+            predicted_class_index = np.argmax(predictions, axis=1)[0]
+            predicted_class_name = card_names[predicted_class_index]
 
-        st.image(img, caption='Uploaded/Captured Image', use_column_width=False, width=300)
-        st.markdown(f"""
-        **Prediction Result:**
+            st.markdown(f"""
+            **Prediction Result:**
 
-        The uploaded or captured card image is most likely: **{predicted_class_name}**
+            The captured card image is most likely: **{predicted_class_name}**
 
-        **Prediction Confidence:**
+            **Prediction Confidence:**
 
-        Probability: {predictions[0][predicted_class_index]:.2f}
-        """)
-    except Exception as e:
-        st.error(f"Error making prediction: {e}")
+            Probability: {predictions[0][predicted_class_index]:.2f}
+            """)
+        except Exception as e:
+            st.error(f"Error making prediction: {e}")
 else:
-    st.warning('Please upload an image or capture one from the webcam to get a prediction.')
+    st.warning('Click "Capture from Webcam" to take a picture and get a prediction.')
