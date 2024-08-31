@@ -50,9 +50,7 @@ def predict_image(img):
 st.title('Real-Time Card Image Classification')
 
 # Real-Time Video Stream Detection
-run_video = st.checkbox("Start Video Stream")
-
-if run_video:
+if st.button("Start Video Stream"):
     cap = cv2.VideoCapture(0)  # Open the default webcam
 
     if not cap.isOpened():
@@ -62,26 +60,33 @@ if run_video:
     frame_placeholder = st.empty()
     prediction_text = st.empty()
 
-    while run_video:
-        ret, frame = cap.read()
-        if not ret:
-            st.error("Failed to read frame from the camera.")
-            break
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                st.error("Failed to read frame from the camera.")
+                break
 
-        # Convert the frame to RGB (OpenCV uses BGR by default)
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_pil = Image.fromarray(frame_rgb)
+            # Convert the frame to RGB (OpenCV uses BGR by default)
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame_pil = Image.fromarray(frame_rgb)
 
-        # Make prediction
-        predicted_class_name, confidence = predict_image(frame_pil)
+            # Make prediction
+            predicted_class_name, confidence = predict_image(frame_pil)
 
-        # Display the frame with prediction
-        frame_placeholder.image(frame_rgb, channels="RGB")
-        prediction_text.markdown(f"**Predicted Card: {predicted_class_name}** (Confidence: {confidence:.2f})")
+            # Display the frame with prediction
+            frame_placeholder.image(frame_rgb, channels="RGB")
+            prediction_text.markdown(f"**Predicted Card: {predicted_class_name}** (Confidence: {confidence:.2f})")
 
-        # Add a break condition to stop the loop
-        if not st.checkbox("Continue Video Stream", value=True):
-            break
+            # Refresh the frame to allow Streamlit to handle events
+            st.experimental_rerun()
 
-    cap.release()
-    frame_placeholder.empty()
+    except st.StopException:
+        cap.release()
+        st.stop()
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+        cap.release()
+
+# End the video stream and release the camera
+st.button("Stop Video Stream", on_click=lambda: cap.release())
