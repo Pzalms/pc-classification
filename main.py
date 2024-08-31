@@ -1,34 +1,11 @@
-import os
-import requests
-import numpy as np
 import streamlit as st
+import cv2
+import numpy as np
 from tensorflow.keras.models import load_model
 from PIL import Image
 
-# Function to download the model from Google Drive
-def download_model_from_link(url, model_path):
-    try:
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-        with open(model_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
-        st.success('Model downloaded successfully.')
-    except requests.RequestException as e:
-        st.error(f"Error downloading model: {e}")
-        raise
-
-# Define model URL and local path
-model_url = 'https://drive.google.com/uc?export=download&id=17KRgfd9uHeSqF_0q627fOX7MeTIryoWY'
-model_path = 'efficientnet.h5'
-
-# Download the model file if it does not exist
-if not os.path.exists(model_path):
-    st.write('Downloading model...')
-    download_model_from_link(model_url, model_path)
-
 # Load the pre-trained model
+model_path = 'efficientnet.h5'
 try:
     model = load_model(model_path)
     st.success('Model loaded successfully.')
@@ -44,37 +21,60 @@ card_names = {
     # ... (rest of the mapping)
 }
 
-# Function to predict card name
 def predict_image(img):
     img = img.convert('RGB')
     img = img.resize(img_size)
     img_array = np.array(img)  # Convert image to array
     img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
 
-    try:
-        predictions = model.predict(img_array)
-        predicted_class_index = np.argmax(predictions, axis=1)[0]
-        predicted_class_name = card_names[predicted_class_index]
-        st.markdown(f"**Prediction Result:** The card image is most likely: **{predicted_class_name}**")
-        st.markdown(f"**Prediction Confidence:** Probability: {predictions[0][predicted_class_index]:.2f}")
-    except Exception as e:
-        st.error(f"Error making prediction: {e}")
+    predictions = model.predict(img_array)
+    predicted_class_index = np.argmax(predictions, axis=1)[0]
+    predicted_class_name = card_names.get(predicted_class_index, 'Unknown')
+    return predicted_class_name, predictions[0][predicted_class_index]
 
-# Streamlit app
-st.title('Card Image Classification')
+def live_prediction():
+    st.title('Live Card Image Classification')
 
-# Upload image functionality
-uploaded_file = st.file_uploader("Choose an image...", type="jpg")
-if uploaded_file is not None:
-    img = Image.open(uploaded_file)
-    st.image(img, caption='Uploaded Image', use_column_width=False, width=300)
-    if st.button("Predict Upload Image"):
-        predict_image(img)
+    # Start video capture
+    cap = cv2.VideoCapture(0)
 
-# Webcam capture functionality
-camera_image = st.camera_input("Take a picture")
-if camera_image is not None:
-    img = Image.open(camera_image)
-    st.image(img, caption='Captured Image', use_column_width=False, width=300)
-    if st.button("Predict Webcam Image"):
-        predict_image(img)
+    if not cap.isOpened():
+        st.error("Cannot open camera. Please ensure the camera is connected and accessible.")
+        return
+
+    st.write("Click 'Stop Video Stream' to end capturing.")
+    stop_button = st.button("Stop Video Stream")
+
+    # Create a placeholder for displaying video
+    frame_placeholder = st.empty()
+
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            st.error("Failed to grab frame.")
+            break
+
+        # Convert frame to PIL image
+        img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+
+        # Make predictions
+        predicted_class_name, confidence = predict_image(img)
+
+        # Display predictions on frame
+        cv2.putText(frame, f'Prediction: {predicted_class_name}', (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+        cv2.putText(frame, f'Confidence: {confidence:.2f}', (10, 60), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+        # Convert frame to PIL image and display
+        frame_image = Image.fromarray(frame)
+        frame_placeholder.image(frame_image, caption='Live Video Feed', use_column_width=True)
+
+        # Break loop if 'Stop' button is pressed
+        if stop_button:
+            break
+
+    cap.release()
+    cv2.destroyAllWindows()
+    st.write("Video stream ended.")
+
+if __name__ == '__main__':
+    live_prediction()
