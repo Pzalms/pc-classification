@@ -112,6 +112,9 @@ run_video = st.checkbox("Start Video Stream")
 if run_video:
     cap = cv2.VideoCapture(0)  # Open the default webcam
 
+    # Create a placeholder for the video frame
+    video_frame = st.empty()
+
     while run_video:
         ret, frame = cap.read()
         if not ret:
@@ -137,10 +140,11 @@ if run_video:
         cv2.putText(frame, f'Predicted: {predicted_class_name}', (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
 
-        # Display the frame with prediction
-        st.image(frame, channels="BGR")
+        # Display the frame with prediction using Streamlit's image display
+        video_frame.image(frame, channels="BGR")
 
-        # Stop the video if checkbox is unchecked
+        # Check if the checkbox is still checked
         run_video = st.checkbox("Start Video Stream", value=True)
 
     cap.release()
+    video_frame.empty()
