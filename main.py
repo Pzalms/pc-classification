@@ -5,6 +5,7 @@ import streamlit as st
 from tensorflow.keras.models import load_model
 from PIL import Image
 import tempfile
+import cv2
 
 # Function to download the model from a direct download link
 def download_model_from_link(url, model_path):
@@ -101,3 +102,45 @@ if camera_image is not None:
     
     if st.button("Predict Webcam Image"):
         predict_image(img)
+
+# Real-time video stream detection
+st.header("Real-Time Video Stream Detection")
+
+# Start video capture
+run_video = st.checkbox("Start Video Stream")
+
+if run_video:
+    cap = cv2.VideoCapture(0)  # Open the default webcam
+
+    while run_video:
+        ret, frame = cap.read()
+        if not ret:
+            st.error("Failed to capture video.")
+            break
+
+        # Convert the frame to RGB (OpenCV uses BGR by default)
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+        # Convert frame to PIL Image
+        pil_img = Image.fromarray(frame_rgb)
+
+        # Resize and predict
+        img_resized = pil_img.resize(img_size)
+        img_array = np.array(img_resized)
+        img_array = np.expand_dims(img_array, axis=0)
+
+        predictions = model.predict(img_array)
+        predicted_class_index = np.argmax(predictions, axis=1)[0]
+        predicted_class_name = card_names[predicted_class_index]
+
+        # Draw prediction on the frame
+        cv2.putText(frame, f'Predicted: {predicted_class_name}', (10, 30),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+        # Display the frame with prediction
+        st.image(frame, channels="BGR")
+
+        # Stop the video if checkbox is unchecked
+        run_video = st.checkbox("Start Video Stream", value=True)
+
+    cap.release()
