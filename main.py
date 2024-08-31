@@ -1,36 +1,11 @@
-import os
-import requests
+import cv2
 import numpy as np
 import streamlit as st
 from tensorflow.keras.models import load_model
 from PIL import Image
-import tempfile
-import cv2
-
-# Function to download the model from a direct download link
-def download_model_from_link(url, model_path):
-    try:
-        response = requests.get(url, stream=True)
-        response.raise_for_status()
-        with open(model_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=1024):
-                if chunk:
-                    f.write(chunk)
-        st.text('Model downloaded successfully.')
-    except requests.RequestException as e:
-        st.error(f"Error downloading model: {e}")
-        raise
-
-# Define model URL and local path
-model_url = 'https://drive.usercontent.google.com/download?id=17KRgfd9uHeSqF_0q627fOX7MeTIryoWY&export=download&authuser=0&confirm=t&uuid=1f97efb3-b4a1-43ba-907f-b31dc5cd46a4&at=AO7h07cc6j_JasHHvb1t5mcR3eNJ:1725018472593'
-model_path = 'efficientnet.h5'
-
-# Download the model file if it does not exist
-if not os.path.exists(model_path):
-    st.text('Downloading model from direct link...')
-    download_model_from_link(model_url, model_path)
 
 # Load the pre-trained model
+model_path = 'efficientnet.h5'
 try:
     model = load_model(model_path)
     st.text('Model loaded successfully.')
@@ -60,91 +35,53 @@ card_names = {
 
 # Function to process and predict image
 def predict_image(img):
-    try:
-        img = img.convert('RGB')
-        img = img.resize(img_size)
-        img_array = np.array(img)  # Convert image to array
-        img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
+    img = img.convert('RGB')
+    img = img.resize(img_size)
+    img_array = np.array(img)  # Convert image to array
+    img_array = np.expand_dims(img_array, axis=0)  # Add batch dimension
 
-        predictions = model.predict(img_array)
-        predicted_class_index = np.argmax(predictions, axis=1)[0]
-        predicted_class_name = card_names[predicted_class_index]
+    predictions = model.predict(img_array)
+    predicted_class_index = np.argmax(predictions, axis=1)[0]
+    predicted_class_name = card_names[predicted_class_index]
 
-        st.markdown(f"""
-        **Prediction Result:**
-
-        The card image is most likely: **{predicted_class_name}**
-
-        **Prediction Confidence:**
-
-        Probability: {predictions[0][predicted_class_index]:.2f}
-        """)
-    except Exception as e:
-        st.error(f"Error making prediction: {e}")
+    return predicted_class_name, predictions[0][predicted_class_index]
 
 # Streamlit app
-st.title('Card Image Classification')
+st.title('Real-Time Card Image Classification')
 
-# Upload image functionality
-uploaded_file = st.file_uploader("Choose an image...", type="jpg")
-if uploaded_file is not None:
-    img = Image.open(uploaded_file)
-    st.image(img, caption='Uploaded Image', use_column_width=False, width=300)
-
-    if st.button("Predict Upload Image"):
-        predict_image(img)
-
-# Webcam capture functionality
-camera_image = st.camera_input("Take a picture")
-if camera_image is not None:
-    img = Image.open(camera_image)
-    st.image(img, caption='Captured Image', use_column_width=False, width=300)
-    
-    if st.button("Predict Webcam Image"):
-        predict_image(img)
-
-# Real-time video stream detection
-st.header("Real-Time Video Stream Detection")
-
-# Start video capture
+# Real-Time Video Stream Detection
 run_video = st.checkbox("Start Video Stream")
 
 if run_video:
     cap = cv2.VideoCapture(0)  # Open the default webcam
 
-    # Create a placeholder for the video frame
-    video_frame = st.empty()
+    if not cap.isOpened():
+        st.error("Failed to capture video. Please check your camera settings.")
+        st.stop()
+
+    frame_placeholder = st.empty()
+    prediction_text = st.empty()
 
     while run_video:
         ret, frame = cap.read()
         if not ret:
-            st.error("Failed to capture video.")
+            st.error("Failed to read frame from the camera.")
             break
 
         # Convert the frame to RGB (OpenCV uses BGR by default)
         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_pil = Image.fromarray(frame_rgb)
 
-        # Convert frame to PIL Image
-        pil_img = Image.fromarray(frame_rgb)
+        # Make prediction
+        predicted_class_name, confidence = predict_image(frame_pil)
 
-        # Resize and predict
-        img_resized = pil_img.resize(img_size)
-        img_array = np.array(img_resized)
-        img_array = np.expand_dims(img_array, axis=0)
+        # Display the frame with prediction
+        frame_placeholder.image(frame_rgb, channels="RGB")
+        prediction_text.markdown(f"**Predicted Card: {predicted_class_name}** (Confidence: {confidence:.2f})")
 
-        predictions = model.predict(img_array)
-        predicted_class_index = np.argmax(predictions, axis=1)[0]
-        predicted_class_name = card_names[predicted_class_index]
-
-        # Draw prediction on the frame
-        cv2.putText(frame, f'Predicted: {predicted_class_name}', (10, 30),
-                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
-
-        # Display the frame with prediction using Streamlit's image display
-        video_frame.image(frame, channels="BGR")
-
-        # Check if the checkbox is still checked
-        run_video = st.checkbox("Start Video Stream", value=True)
+        # Add a break condition to stop the loop
+        if not st.checkbox("Continue Video Stream", value=True):
+            break
 
     cap.release()
-    video_frame.empty()
+    frame_placeholder.empty()
