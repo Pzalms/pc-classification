@@ -1,19 +1,14 @@
+import streamlit as st
 import cv2
 import numpy as np
-import streamlit as st
 from tensorflow.keras.models import load_model
 from PIL import Image
 
 # Load the pre-trained model
 model_path = 'efficientnet.h5'
-try:
-    model = load_model(model_path)
-    st.text('Model loaded successfully.')
-except Exception as e:
-    st.error(f"Error loading model: {e}")
-    raise
+model = load_model(model_path)
 
-# Define image size expected by the model
+# Define the image size expected by the model
 img_size = (200, 200)
 
 # Dictionary mapping indices to card names
@@ -33,7 +28,7 @@ card_names = {
     49: 'two of clubs', 50: 'two of diamonds', 51: 'two of hearts', 52: 'two of spades'
 }
 
-# Function to process and predict image
+# Function to predict card name
 def predict_image(img):
     img = img.convert('RGB')
     img = img.resize(img_size)
@@ -46,49 +41,40 @@ def predict_image(img):
 
     return predicted_class_name, predictions[0][predicted_class_index]
 
-# Streamlit app
+# Streamlit app setup
 st.title('Real-Time Card Image Classification')
 
-# Real-Time Video Stream Detection
+# Live Video Stream
 if st.checkbox("Start Video Stream"):
 
-    # Try different indices for the camera
-    cap = None
-    for i in range(5):  # Trying the first five indices
-        cap = cv2.VideoCapture(i)
-        if cap.isOpened():
-            st.text(f"Camera {i} opened successfully.")
-            break
+    # Open video capture (using default webcam)
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        st.error("Failed to access the camera. Please ensure the camera is connected and accessible.")
+    else:
+        stframe = st.empty()  # Streamlit frame for displaying video
+
+        while st.checkbox("Start Video Stream", value=True):
+            ret, frame = cap.read()
+            if not ret:
+                st.error("Failed to read frame from the camera.")
+                break
+
+            # Convert frame to RGB and prepare for prediction
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            frame_pil = Image.fromarray(frame_rgb)
+
+            # Make prediction
+            predicted_class_name, confidence = predict_image(frame_pil)
+
+            # Display the prediction on the frame
+            cv2.putText(frame, f'{predicted_class_name} ({confidence:.2f})', (10, 30),
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2, cv2.LINE_AA)
+
+            # Display the frame in Streamlit
+            stframe.image(frame, channels='BGR')
+
+        # Release the video capture once done
         cap.release()
-
-    if not cap or not cap.isOpened():
-        st.error("Failed to capture video from any camera index. Please check your camera settings and permissions.")
-        st.stop()
-
-    frame_placeholder = st.empty()
-    prediction_text = st.empty()
-
-    while True:
-        ret, frame = cap.read()
-        if not ret:
-            st.error("Failed to read frame from the camera.")
-            break
-
-        # Convert the frame to RGB (OpenCV uses BGR by default)
-        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        frame_pil = Image.fromarray(frame_rgb)
-
-        # Make prediction
-        predicted_class_name, confidence = predict_image(frame_pil)
-
-        # Display the frame with prediction
-        frame_placeholder.image(frame_rgb, channels="RGB")
-        prediction_text.markdown(f"**Predicted Card: {predicted_class_name}** (Confidence: {confidence:.2f})")
-
-        # Check if the user has unchecked the checkbox to stop the video stream
-        if not st.checkbox("Start Video Stream", value=True):
-            break
-
-    cap.release()
     st.success("Video stream ended.")
 
