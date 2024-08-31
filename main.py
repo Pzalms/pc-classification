@@ -51,41 +51,44 @@ st.title('Real-Time Card Image Classification')
 
 # Real-Time Video Stream Detection
 if st.checkbox("Start Video Stream"):
-    cap = cv2.VideoCapture(0)  # Open the default webcam
 
-    if not cap.isOpened():
-        st.error("Failed to capture video. Please check your camera settings.")
+    # Try different indices for the camera
+    cap = None
+    for i in range(5):  # Trying the first five indices
+        cap = cv2.VideoCapture(i)
+        if cap.isOpened():
+            st.text(f"Camera {i} opened successfully.")
+            break
+        cap.release()
+
+    if not cap or not cap.isOpened():
+        st.error("Failed to capture video from any camera index. Please check your camera settings and permissions.")
         st.stop()
 
     frame_placeholder = st.empty()
     prediction_text = st.empty()
 
-    try:
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                st.error("Failed to read frame from the camera.")
-                break
+    while True:
+        ret, frame = cap.read()
+        if not ret:
+            st.error("Failed to read frame from the camera.")
+            break
 
-            # Convert the frame to RGB (OpenCV uses BGR by default)
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame_pil = Image.fromarray(frame_rgb)
+        # Convert the frame to RGB (OpenCV uses BGR by default)
+        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        frame_pil = Image.fromarray(frame_rgb)
 
-            # Make prediction
-            predicted_class_name, confidence = predict_image(frame_pil)
+        # Make prediction
+        predicted_class_name, confidence = predict_image(frame_pil)
 
-            # Display the frame with prediction
-            frame_placeholder.image(frame_rgb, channels="RGB")
-            prediction_text.markdown(f"**Predicted Card: {predicted_class_name}** (Confidence: {confidence:.2f})")
+        # Display the frame with prediction
+        frame_placeholder.image(frame_rgb, channels="RGB")
+        prediction_text.markdown(f"**Predicted Card: {predicted_class_name}** (Confidence: {confidence:.2f})")
 
-            # Break the loop if checkbox is unchecked
-            if not st.checkbox("Start Video Stream", value=True):
-                break
+        # Check if the user has unchecked the checkbox to stop the video stream
+        if not st.checkbox("Start Video Stream", value=True):
+            break
 
-        cap.release()
-        st.success("Video stream ended.")
-
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
-        cap.release()
+    cap.release()
+    st.success("Video stream ended.")
 
